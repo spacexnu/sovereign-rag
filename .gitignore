@@ -198,8 +198,7 @@ cython_debug/
 .iml
 
 # sources
-*.pdf
-*.txt
+sources/*
 
 # Output directory
 output/

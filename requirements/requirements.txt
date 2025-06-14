@@ -1,0 +1,10 @@
+pymupdf
+spacy
+tqdm
+chromadb
+sentence-transformers
+llama-index
+llama-index-llms-ollama
+llama-index-vector-stores-chroma
+llama-index-embeddings-huggingface
+colorama
