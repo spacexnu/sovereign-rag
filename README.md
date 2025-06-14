@@ -19,6 +19,9 @@
 
 ---
 
+<img alt="graph" height="50%" src="sovereign-rag.png" width="50%"/>
+
+
 ## Philosophy
 
 Sovereign AI - private, secure, under full control.
@@ -105,6 +108,7 @@ You can still use the individual scripts directly:
 python src/ingest.py --pdf-dir ./security_pdfs/
 python src/query.py --file ./src/app.py
 ```
+![animated-gif-cli-running](sovereign-rag-faster.gif)
 
 ## Development
 
