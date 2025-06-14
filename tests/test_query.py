@@ -48,7 +48,7 @@ class TestCreateOutputDirectory(unittest.TestCase):
 class TestGenerateHtmlHeader(unittest.TestCase):
     """Test the generate_html_header function."""
 
-    @patch('src.query.datetime')
+    @patch('src.html_report.datetime')
     def test_generate_html_header(self, mock_datetime):
         """Test generating an HTML header."""
         # Set up mocks
