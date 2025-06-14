@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
-[![Build](https://github.com/seuuser/seurepo/actions/workflows/build.yml/badge.svg)](link-pro-workflow)
+[![Build](https://github.com/spacexnu/sovereign-rag/actions/workflows/build.yml/badge.svg)](https://github.com/spacexnu/sovereign-rag/actions/workflows/build.yml)
 
 ---
 
