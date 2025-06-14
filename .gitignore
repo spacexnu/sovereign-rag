@@ -196,3 +196,10 @@ cython_debug/
 # Jetbrains
 /.idea/
 .iml
+
+# sources
+*.pdf
+*.txt
+
+# Output directory
+output/

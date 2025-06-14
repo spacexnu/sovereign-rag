@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [".venv", "__pycache__"]
+fix = true
+
+[tool.ruff.lint]
+select = ["I", "F401"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-single-line = false
+case-sensitive = false
