@@ -203,3 +203,6 @@ cython_debug/
 
 # Output directory
 output/
+
+# macOS garbage
+.DS_Store
