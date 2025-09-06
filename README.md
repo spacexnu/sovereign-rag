@@ -92,12 +92,12 @@ python src/cli.py query --file PATH_TO_SOURCE_FILE [--model MODEL_NAME] [--ollam
 
 Options:
 - `--file` or `-f`: Path to the source code file to analyze (required)
-- `--model` or `-m`: Ollama model to use (default: phi3:3b)
+- `--model` or `-m`: Ollama model to use (default: mistral:7b-instruct)
 - `--ollama-url`: Ollama API URL (default: http://localhost:11434)
 
 Example:
 ```bash
-python src/cli.py query --file ./src/app.py --model phi3:3b
+python src/cli.py query --file ./src/app.py --model mistral:7b-instruct
 ```
 
 ### Individual Commands
@@ -109,6 +109,97 @@ python src/ingest.py --pdf-dir ./security_pdfs/
 python src/query.py --file ./src/app.py
 ```
 ![animated-gif-cli-running](sovereign-rag-faster.gif)
+
+## Docker
+
+Run the full stack (Python app, Ollama with Phi-3, and persistent ChromaDB) via Docker.
+
+Prerequisites:
+
+- Docker and Docker Compose
+
+Build images and start services:
+
+```bash
+docker compose build
+docker compose up -d ollama
+```
+
+Pull a model (e.g., Mistral 7B Instruct). Use exec to run inside the running service:
+
+```bash
+docker compose exec ollama ollama pull mistral:7b-instruct
+```
+
+If the service isn’t ready yet, wait a few seconds or check logs:
+
+```bash
+docker compose logs -f ollama
+```
+
+Note: If a model tag is not found (e.g., "pull model manifest: file does not exist"), try a known tag like `mistral:7b-instruct` or `phi3:mini`, or list available models:
+
+```bash
+docker compose exec ollama ollama list
+```
+
+You can also browse tags at https://ollama.com/library
+
+Ingest PDFs (mounted at ./raw_pdfs on the host):
+
+```bash
+docker compose run --rm app python src/cli.py ingest --pdf-dir ./raw_pdfs/ --model all-MiniLM-L6-v2
+```
+
+Query code for security analysis. Note: when running inside Docker, point to the Ollama service URL.
+
+```bash
+# Single file (use --path instead of --file)
+    docker compose run --rm app python src/cli.py query --path ./src/query.py --model mistral:7b-instruct --ollama-url http://ollama:11434
+
+# Directory + extension filter
+docker compose run --rm app python src/cli.py query --path ./src --extension py --model mistral:7b-instruct --ollama-url http://ollama:11434
+```
+
+Outputs and data persistence:
+
+- ChromaDB data: `./chroma_db` (host) is mounted to `/app/chroma_db` (container)
+- Reports: `./output` (host) is mounted to `/app/output` (container)
+- PDFs: `./raw_pdfs` (host) is mounted to `/app/raw_pdfs` (container)
+
+Stop services:
+
+```bash
+docker compose down
+```
+
+### Docker: Development image (requirements-dev)
+
+Use the dev image to get `pytest`, `ruff`, and other developer tools from `requirements/requirements_dev.txt`.
+
+Build and open a shell in the dev container:
+
+```bash
+docker compose build app-dev
+docker compose run --rm app-dev bash
+```
+
+Inside the dev container, run common tasks:
+
+```bash
+# Format
+ruff format .
+
+# Lint
+ruff check .
+
+# Tests
+pytest -q
+
+# App commands (same as prod), pointing to Ollama service
+python src/cli.py ingest --pdf-dir ./raw_pdfs/ --model all-MiniLM-L6-v2
+python src/cli.py query --path ./src --extension py --model mistral:7b-instruct --ollama-url http://ollama:11434
+```
 
 ## Development
 

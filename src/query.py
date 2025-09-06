@@ -243,8 +243,8 @@ def main():
         '--model',
         '-m',
         type=str,
-        default='phi3:m1-latest',
-        help='Ollama model to use (default: phi3:m1-latest)',
+        default='mistral:7b-instruct',
+        help='Ollama model to use (default: mistral:7b-instruct)',
     )
     parser.add_argument(
         '--ollama-url',
