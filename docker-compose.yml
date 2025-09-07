@@ -1,0 +1,51 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sovereign-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ollama list >/dev/null 2>&1 || curl -fsS http://localhost:11434/api/version >/dev/null 2>&1 || exit 1"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build: .
+    container_name: sovereign-rag
+    depends_on:
+      ollama:
+        condition: service_started
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Persist data & enable host access to outputs
+      - ./chroma_db:/app/chroma_db
+      - ./output:/app/output
+      - ./raw_pdfs:/app/raw_pdfs
+    # Run commands directly via `docker compose run --rm app <cmd>`
+
+  app-dev:
+    build:
+      context: .
+      args:
+        ENVIRONMENT: dev
+    container_name: sovereign-rag-dev
+    depends_on:
+      ollama:
+        condition: service_started
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./:/app
+    entrypoint: ["bash", "-lc"]
+    command: ["bash"]
+
+volumes:
+  ollama:

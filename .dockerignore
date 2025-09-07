@@ -1,0 +1,17 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.idea/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+*.DS_Store
+output/
+chroma_db/
+raw_pdfs/
+sovereign-rag.png
+sovereign-rag-faster.gif
+
