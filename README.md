@@ -37,31 +37,24 @@ Build your own lab. Own your models. Control your data.
 
 ## Install
 
+This project is designed to run via Docker. The Makefile wraps the common Docker Compose commands.
+
 Requirements:
+
+- Docker and Docker Compose
+
+Optional (local dev only):
 
 - Python 3.10+
 - Ollama
-- PyMuPDF
-- spaCy
-- sentence-transformers
-- chromadb
-- llama-index and related packages (llama-index-llms-ollama, llama-index-vector-stores-chroma, llama-index-embeddings-huggingface)
-- colorama (for colored CLI output)
 
-Install dependencies:
+Build images:
 
 ```bash
-pip install -r requirements/requirements.txt
-python -m spacy download en_core_web_sm
+make build
 ```
 
-For development, install additional dependencies:
-
-```bash
-pip install -r requirements/requirements_dev.txt
-```
-
-## Usage
+## Usage (Docker)
 
 SovereignRAG provides a unified CLI interface with colored output for better readability. There are two main commands:
 
@@ -70,7 +63,7 @@ SovereignRAG provides a unified CLI interface with colored output for better rea
 To ingest security-related PDF documents into the vector database:
 
 ```bash
-python src/cli.py ingest [--pdf-dir PATH_TO_PDF_DIR] [--model MODEL_NAME]
+make ingest PDF_DIR=./raw_pdfs MODEL=all-MiniLM-L6-v2
 ```
 
 Options:
@@ -79,7 +72,7 @@ Options:
 
 Example:
 ```bash
-python src/cli.py ingest --pdf-dir ./security_pdfs/ --model all-MiniLM-L6-v2
+make ingest PDF_DIR=./security_pdfs MODEL=all-MiniLM-L6-v2
 ```
 
 ### Query for Security Analysis
@@ -87,78 +80,39 @@ python src/cli.py ingest --pdf-dir ./security_pdfs/ --model all-MiniLM-L6-v2
 To analyze a source code file for security vulnerabilities:
 
 ```bash
-python src/cli.py query --file PATH_TO_SOURCE_FILE [--model MODEL_NAME] [--ollama-url URL]
+make query PATH=./src/query.py EXT=py MODEL=mistral:7b-instruct
 ```
 
-Options:
-- `--file` or `-f`: Path to the source code file to analyze (required)
-- `--model` or `-m`: Ollama model to use (default: mistral:7b-instruct)
-- `--ollama-url`: Ollama API URL (default: http://localhost:11434)
+Options (via Makefile vars):
+- `PATH`: Path to the source code file or directory to analyze (required)
+- `EXT`: File extension filter when PATH is a directory (optional)
+- `MODEL`: Ollama model to use (default: mistral:7b-instruct)
+- `OLLAMA_URL`: Ollama API URL (default: http://ollama:11434)
 
-Example:
-```bash
-python src/cli.py query --file ./src/app.py --model mistral:7b-instruct
-```
+### Makefile helpers
 
-### Individual Commands
-
-You can still use the individual scripts directly:
+Common tasks:
 
 ```bash
-python src/ingest.py --pdf-dir ./security_pdfs/
-python src/query.py --file ./src/app.py
+make up
+make pull-model MODEL=mistral:7b-instruct
+make ingest PDF_DIR=./raw_pdfs MODEL=all-MiniLM-L6-v2
+make query PATH=./src EXT=py MODEL=mistral:7b-instruct
+make down
 ```
 ![animated-gif-cli-running](sovereign-rag-faster.gif)
 
-## Docker
+## Docker (manual)
 
-Run the full stack (Python app, Ollama with Phi-3, and persistent ChromaDB) via Docker.
-
-Prerequisites:
-
-- Docker and Docker Compose
-
-Build images and start services:
+If you prefer raw Docker Compose commands instead of the Makefile:
 
 ```bash
 docker compose build
 docker compose up -d ollama
-```
-
-Pull a model (e.g., Mistral 7B Instruct). Use exec to run inside the running service:
-
-```bash
 docker compose exec ollama ollama pull mistral:7b-instruct
-```
-
-If the service isn’t ready yet, wait a few seconds or check logs:
-
-```bash
-docker compose logs -f ollama
-```
-
-Note: If a model tag is not found (e.g., "pull model manifest: file does not exist"), try a known tag like `mistral:7b-instruct` or `phi3:mini`, or list available models:
-
-```bash
-docker compose exec ollama ollama list
-```
-
-You can also browse tags at https://ollama.com/library
-
-Ingest PDFs (mounted at ./raw_pdfs on the host):
-
-```bash
-docker compose run --rm app python src/cli.py ingest --pdf-dir ./raw_pdfs/ --model all-MiniLM-L6-v2
-```
-
-Query code for security analysis. Note: when running inside Docker, point to the Ollama service URL.
-
-```bash
-# Single file (use --path instead of --file)
-    docker compose run --rm app python src/cli.py query --path ./src/query.py --model mistral:7b-instruct --ollama-url http://ollama:11434
-
-# Directory + extension filter
+docker compose run --rm app python src/cli.py ingest --pdf-dir ./raw_pdfs --model all-MiniLM-L6-v2
 docker compose run --rm app python src/cli.py query --path ./src --extension py --model mistral:7b-instruct --ollama-url http://ollama:11434
+docker compose down
 ```
 
 Outputs and data persistence:
@@ -201,7 +155,7 @@ python src/cli.py ingest --pdf-dir ./raw_pdfs/ --model all-MiniLM-L6-v2
 python src/cli.py query --path ./src --extension py --model mistral:7b-instruct --ollama-url http://ollama:11434
 ```
 
-## Development
+## Development (local, optional)
 
 ### Code Formatting
 

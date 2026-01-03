@@ -37,7 +37,7 @@ def create_output_directory():
     now = datetime.datetime.now()
     datetime_str = now.strftime('%Y-%m-%d_%H-%M-%S')
     run_dir = os.path.join(output_dir, datetime_str)
-    os.makedirs(run_dir)
+    os.makedirs(run_dir, exist_ok=True)
 
     return run_dir
 
@@ -84,7 +84,7 @@ def process_file(file_path, index, model_name, ollama_url, output_dir, html_cont
     """
     try:
         print(f'{Fore.WHITE}{Style.BRIGHT}File process started: {file_path}')
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
             code = f.read()
 
         query = f"""
@@ -229,6 +229,9 @@ def main():
     parser.add_argument(
         '--path',
         '-p',
+        '--file',
+        '-f',
+        dest='path',
         type=str,
         required=True,
         help='Path to the source code file or directory to analyze',

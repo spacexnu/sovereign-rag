@@ -31,6 +31,24 @@ def main():
         default='all-MiniLM-L6-v2',
         help='Sentence transformer model to use (default: all-MiniLM-L6-v2)',
     )
+    ingest_parser.add_argument(
+        '--chunk-size-chars',
+        type=int,
+        default=1800,
+        help='Target chunk size in characters (default: 1800)',
+    )
+    ingest_parser.add_argument(
+        '--overlap-sents',
+        type=int,
+        default=2,
+        help='Number of sentences to overlap between chunks (default: 2)',
+    )
+    ingest_parser.add_argument(
+        '--embed-batch-size',
+        type=int,
+        default=32,
+        help='Batch size for embedding encoding (default: 32)',
+    )
 
     # Create the query command parser
     query_parser = subparsers.add_parser('query', help='Analyze code for security vulnerabilities')
@@ -74,7 +92,13 @@ def main():
     if args.command == 'ingest':
         from ingest import run_ingest
 
-        run_ingest(args.pdf_dir, args.model)
+        run_ingest(
+            args.pdf_dir,
+            args.model,
+            chunk_size_chars=args.chunk_size_chars,
+            overlap_sents=args.overlap_sents,
+            embed_batch_size=args.embed_batch_size,
+        )
     elif args.command == 'query':
         from query import run_query
 

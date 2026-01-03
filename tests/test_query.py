@@ -41,7 +41,7 @@ class TestCreateOutputDirectory(unittest.TestCase):
 
         mock_exists.assert_called_once_with(expected_output_dir)
         mock_makedirs.assert_any_call(expected_output_dir)
-        mock_makedirs.assert_any_call(expected_run_dir)
+        mock_makedirs.assert_any_call(expected_run_dir, exist_ok=True)
         self.assertEqual(result, expected_run_dir)
 
 
@@ -154,7 +154,7 @@ class TestProcessFile(unittest.TestCase):
 
         # Verify the result
         self.assertTrue(result)
-        mock_file_open.assert_called_once_with('test_file.py', 'r')
+        mock_file_open.assert_called_once_with('test_file.py', 'r', encoding='utf-8', errors='replace')
         mock_index.as_retriever.assert_called_once_with(similarity_top_k=3)
         mock_retriever.retrieve.assert_called_once()
         mock_settings.llm.complete.assert_called_once()
@@ -177,7 +177,7 @@ class TestProcessFile(unittest.TestCase):
 
         # Verify the result
         self.assertFalse(result)
-        mock_file_open.assert_called_once_with('test_file.py', 'r')
+        mock_file_open.assert_called_once_with('test_file.py', 'r', encoding='utf-8', errors='replace')
         self.assertEqual(len(html_content), 0)
 
 
