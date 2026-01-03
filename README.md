@@ -80,13 +80,13 @@ make ingest PDF_DIR=./security_pdfs MODEL=all-MiniLM-L6-v2
 To analyze a source code file for security vulnerabilities:
 
 ```bash
-make query PATH=./src/query.py EXT=py MODEL=mistral:7b-instruct
+make query PATH=./src/query.py EXT=py MODEL=qwen2.5:3b-instruct
 ```
 
 Options (via Makefile vars):
 - `PATH`: Path to the source code file or directory to analyze (required)
 - `EXT`: File extension filter when PATH is a directory (optional)
-- `MODEL`: Ollama model to use (default: mistral:7b-instruct)
+- `MODEL`: Ollama model to use (default: qwen2.5:3b-instruct)
 - `OLLAMA_URL`: Ollama API URL (default: http://ollama:11434)
 
 ### Makefile helpers
@@ -95,9 +95,9 @@ Common tasks:
 
 ```bash
 make up
-make pull-model MODEL=mistral:7b-instruct
+make pull-model MODEL=qwen2.5:3b-instruct
 make ingest PDF_DIR=./raw_pdfs MODEL=all-MiniLM-L6-v2
-make query PATH=./src EXT=py MODEL=mistral:7b-instruct
+make query PATH=./src EXT=py MODEL=qwen2.5:3b-instruct
 make down
 ```
 ![animated-gif-cli-running](sovereign-rag-faster.gif)
@@ -109,9 +109,9 @@ If you prefer raw Docker Compose commands instead of the Makefile:
 ```bash
 docker compose build
 docker compose up -d ollama
-docker compose exec ollama ollama pull mistral:7b-instruct
+docker compose exec ollama ollama pull qwen2.5:3b-instruct
 docker compose run --rm app python src/cli.py ingest --pdf-dir ./raw_pdfs --model all-MiniLM-L6-v2
-docker compose run --rm app python src/cli.py query --path ./src --extension py --model mistral:7b-instruct --ollama-url http://ollama:11434
+docker compose run --rm app python src/cli.py query --path ./src --extension py --model qwen2.5:3b-instruct --ollama-url http://ollama:11434
 docker compose down
 ```
 
@@ -152,7 +152,7 @@ pytest -q
 
 # App commands (same as prod), pointing to Ollama service
 python src/cli.py ingest --pdf-dir ./raw_pdfs/ --model all-MiniLM-L6-v2
-python src/cli.py query --path ./src --extension py --model mistral:7b-instruct --ollama-url http://ollama:11434
+python src/cli.py query --path ./src --extension py --model qwen2.5:3b-instruct --ollama-url http://ollama:11434
 ```
 
 ## Development (local, optional)
