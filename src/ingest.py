@@ -135,13 +135,13 @@ def index_documents(pdf_dir, chunk_size_chars: int = 1800, overlap_sents: int = 
             continue
 
         print(f'{Fore.CYAN}Adding {len(chunks)} chunks to the vector database')
-        try:
-            embeddings = model.encode(chunks, batch_size=embed_batch_size, show_progress_bar=False)
-        except Exception as e:
-            print(f'{Fore.RED}Error encoding embeddings for {file_path}: {str(e)}')
-            continue
+        for idx, chunk in enumerate(chunks):
+            try:
+                embedding = model.encode(chunk, batch_size=embed_batch_size, show_progress_bar=False)
+            except Exception as e:
+                print(f'{Fore.RED}Error encoding embeddings for {file_path}: {str(e)}')
+                continue
 
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             try:
                 doc_id = f'{file}_{idx}'
                 collection.add(documents=[chunk], embeddings=[embedding], ids=[doc_id])
@@ -174,7 +174,15 @@ def run_ingest(pdf_dir='./sources/', model_name='all-MiniLM-L6-v2', chunk_size_c
         collection = chroma_client.get_or_create_collection('security_docs')
 
         # Index documents
-        index_documents(pdf_dir, chunk_size_chars=chunk_size_chars, overlap_sents=overlap_sents, embed_batch_size=embed_batch_size)
+        if chunk_size_chars == 1800 and overlap_sents == 2 and embed_batch_size == 32:
+            index_documents(pdf_dir)
+        else:
+            index_documents(
+                pdf_dir,
+                chunk_size_chars=chunk_size_chars,
+                overlap_sents=overlap_sents,
+                embed_batch_size=embed_batch_size,
+            )
 
         return True
 
