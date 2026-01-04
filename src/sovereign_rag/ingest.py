@@ -1,23 +1,23 @@
-import fitz
-import re
-import spacy
-from tqdm import tqdm
-import os
-import sys
 import argparse
+import os
+import re
+import sys
+
 import chromadb
+import fitz
+import spacy
+from colorama import Fore, Style, init
 from sentence_transformers import SentenceTransformer
-from typing import List
-from colorama import init, Fore, Style
+from tqdm import tqdm
 
 # Initialize colorama
 init(autoreset=True)
 
 
 def clean_text(text):
-    text = re.sub(r'\n+', '\n', text)
-    text = re.sub(r'[ ]{2,}', ' ', text)
-    text = re.sub(r'Page \d+ of \d+', '', text)
+    text = re.sub(r"\n+", "\n", text)
+    text = re.sub(r"[ ]{2,}", " ", text)
+    text = re.sub(r"Page \d+ of \d+", "", text)
     text = text.strip()
     return text
 
@@ -25,12 +25,14 @@ def clean_text(text):
 def is_relevant_sentence(sent):
     if len(sent.text.strip()) < 20:
         return False
-    if not any(tok.pos_ == 'VERB' for tok in sent):
+    if not any(tok.pos_ == "VERB" for tok in sent):
         return False
     return True
 
 
-def build_chunks_from_sentences(sentences: List[str], chunk_size_chars: int = 1800, overlap_sents: int = 2) -> List[str]:
+def build_chunks_from_sentences(
+    sentences: list[str], chunk_size_chars: int = 1800, overlap_sents: int = 2
+) -> list[str]:
     """Group sentences into larger chunks to control context size.
 
     Args:
@@ -44,8 +46,8 @@ def build_chunks_from_sentences(sentences: List[str], chunk_size_chars: int = 18
     if not sentences:
         return []
 
-    chunks: List[str] = []
-    current: List[str] = []
+    chunks: list[str] = []
+    current: list[str] = []
     current_len = 0
 
     for s in sentences:
@@ -78,7 +80,7 @@ def build_chunks_from_sentences(sentences: List[str], chunk_size_chars: int = 18
 
     # de-duplicate while preserving order
     seen = set()
-    deduped: List[str] = []
+    deduped: list[str] = []
     for c in chunks:
         if c not in seen:
             seen.add(c)
@@ -90,9 +92,9 @@ def build_chunks_from_sentences(sentences: List[str], chunk_size_chars: int = 18
 def preprocess_pdf(pdf_path, chunk_size_chars: int = 1800, overlap_sents: int = 2):
     try:
         doc = fitz.open(pdf_path)
-        sentences: List[str] = []
+        sentences: list[str] = []
 
-        for page in tqdm(doc, desc=f'Processing {pdf_path}'):
+        for page in tqdm(doc, desc=f"Processing {pdf_path}"):
             raw_text = page.get_text()
             cleaned = clean_text(raw_text)
             if not cleaned:
@@ -106,52 +108,58 @@ def preprocess_pdf(pdf_path, chunk_size_chars: int = 1800, overlap_sents: int = 
         return build_chunks_from_sentences(sentences, chunk_size_chars=chunk_size_chars, overlap_sents=overlap_sents)
 
     except Exception as e:
-        print(f'{Fore.RED}Error processing PDF {pdf_path}: {str(e)}')
+        print(f"{Fore.RED}Error processing PDF {pdf_path}: {str(e)}")
         return []
 
 
 def index_documents(pdf_dir, chunk_size_chars: int = 1800, overlap_sents: int = 2, embed_batch_size: int = 32):
     # Create directory if it doesn't exist
     if not os.path.exists(pdf_dir):
-        print(f'{Fore.YELLOW}Creating directory {pdf_dir}')
+        print(f"{Fore.YELLOW}Creating directory {pdf_dir}")
         os.makedirs(pdf_dir)
-        print(f'{Fore.YELLOW}Please add PDF files to {pdf_dir} and run the script again.')
+        print(f"{Fore.YELLOW}Please add PDF files to {pdf_dir} and run the script again.")
         return
 
     # Check if directory contains PDF files
-    pdf_files = [f for f in os.listdir(pdf_dir) if f.lower().endswith('.pdf')]
+    pdf_files = [f for f in os.listdir(pdf_dir) if f.lower().endswith(".pdf")]
     if not pdf_files:
-        print(f'{Fore.YELLOW}No PDF files found in {pdf_dir}. Please add PDF files and run the script again.')
+        print(f"{Fore.YELLOW}No PDF files found in {pdf_dir}. Please add PDF files and run the script again.")
         return
 
     # Process each PDF file
     for file in pdf_files:
         file_path = os.path.join(pdf_dir, file)
-        print(f'{Fore.CYAN}Processing {file_path}')
+        print(f"{Fore.CYAN}Processing {file_path}")
         chunks = preprocess_pdf(file_path, chunk_size_chars=chunk_size_chars, overlap_sents=overlap_sents)
 
         if not chunks:
-            print(f'{Fore.YELLOW}No valid chunks extracted from {file_path}')
+            print(f"{Fore.YELLOW}No valid chunks extracted from {file_path}")
             continue
 
-        print(f'{Fore.CYAN}Adding {len(chunks)} chunks to the vector database')
+        print(f"{Fore.CYAN}Adding {len(chunks)} chunks to the vector database")
         for idx, chunk in enumerate(chunks):
             try:
                 embedding = model.encode(chunk, batch_size=embed_batch_size, show_progress_bar=False)
             except Exception as e:
-                print(f'{Fore.RED}Error encoding embeddings for {file_path}: {str(e)}')
+                print(f"{Fore.RED}Error encoding embeddings for {file_path}: {str(e)}")
                 continue
 
             try:
-                doc_id = f'{file}_{idx}'
+                doc_id = f"{file}_{idx}"
                 collection.add(documents=[chunk], embeddings=[embedding], ids=[doc_id])
             except Exception as e:
-                print(f'{Fore.RED}Error adding chunk {idx} from {file_path}: {str(e)}')
+                print(f"{Fore.RED}Error adding chunk {idx} from {file_path}: {str(e)}")
 
-    print(f'{Fore.GREEN}{Style.BRIGHT}Indexing completed!')
+    print(f"{Fore.GREEN}{Style.BRIGHT}Indexing completed!")
 
 
-def run_ingest(pdf_dir='./sources/', model_name='all-MiniLM-L6-v2', chunk_size_chars: int = 1800, overlap_sents: int = 2, embed_batch_size: int = 32):
+def run_ingest(
+    pdf_dir="./sources/",
+    model_name="all-MiniLM-L6-v2",
+    chunk_size_chars: int = 1800,
+    overlap_sents: int = 2,
+    embed_batch_size: int = 32,
+):
     """
     Run the ingestion process to index PDF documents.
 
@@ -162,7 +170,7 @@ def run_ingest(pdf_dir='./sources/', model_name='all-MiniLM-L6-v2', chunk_size_c
     try:
         # Initialize spaCy
         global nlp
-        nlp = spacy.load('en_core_web_sm')
+        nlp = spacy.load("en_core_web_sm")
 
         # Initialize sentence transformer
         global model
@@ -170,8 +178,8 @@ def run_ingest(pdf_dir='./sources/', model_name='all-MiniLM-L6-v2', chunk_size_c
 
         # Initialize ChromaDB
         global chroma_client, collection
-        chroma_client = chromadb.PersistentClient(path='./chroma_db')
-        collection = chroma_client.get_or_create_collection('security_docs')
+        chroma_client = chromadb.PersistentClient(path="./chroma_db")
+        collection = chroma_client.get_or_create_collection("security_docs")
 
         # Index documents
         if chunk_size_chars == 1800 and overlap_sents == 2 and embed_batch_size == 32:
@@ -187,42 +195,42 @@ def run_ingest(pdf_dir='./sources/', model_name='all-MiniLM-L6-v2', chunk_size_c
         return True
 
     except Exception as e:
-        print(f'{Fore.RED}{Style.BRIGHT}Error: {str(e)}')
+        print(f"{Fore.RED}{Style.BRIGHT}Error: {str(e)}")
         return False
 
 
 def main():
     """Command line interface for the ingest module."""
-    parser = argparse.ArgumentParser(description='Index PDF documents for security analysis')
+    parser = argparse.ArgumentParser(description="Index PDF documents for security analysis")
     parser.add_argument(
-        '--pdf-dir',
+        "--pdf-dir",
         type=str,
-        default='./raw_pdfs/',
-        help='Directory containing PDF files to index (default: ./raw_pdfs/)',
+        default="./raw_pdfs/",
+        help="Directory containing PDF files to index (default: ./raw_pdfs/)",
     )
     parser.add_argument(
-        '--model',
+        "--model",
         type=str,
-        default='all-MiniLM-L6-v2',
-        help='Sentence transformer model to use (default: all-MiniLM-L6-v2)',
+        default="all-MiniLM-L6-v2",
+        help="Sentence transformer model to use (default: all-MiniLM-L6-v2)",
     )
     parser.add_argument(
-        '--chunk-size-chars',
+        "--chunk-size-chars",
         type=int,
         default=1800,
-        help='Target chunk size in characters (default: 1800)',
+        help="Target chunk size in characters (default: 1800)",
     )
     parser.add_argument(
-        '--overlap-sents',
+        "--overlap-sents",
         type=int,
         default=2,
-        help='Number of sentences to overlap between chunks (default: 2)',
+        help="Number of sentences to overlap between chunks (default: 2)",
     )
     parser.add_argument(
-        '--embed-batch-size',
+        "--embed-batch-size",
         type=int,
         default=32,
-        help='Batch size for embedding encoding (default: 32)',
+        help="Batch size for embedding encoding (default: 32)",
     )
     args = parser.parse_args()
 
@@ -237,5 +245,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -42,10 +42,10 @@ list-models:
 	$(COMPOSE) exec ollama ollama list
 
 ingest:
-	$(COMPOSE) run --rm app python src/cli.py ingest --pdf-dir $(PDF_DIR) --model $(MODEL)
+	$(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli ingest --pdf-dir $(PDF_DIR) --model $(MODEL)
 
 query:
-	$(COMPOSE) run --rm app python src/cli.py query --path $(PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL)
+	$(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL)
 
 shell:
 	$(COMPOSE) run --rm app bash

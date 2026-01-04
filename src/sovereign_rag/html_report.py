@@ -84,7 +84,7 @@ def generate_html_header(title):
 <body>
     <div class="container">
         <h1>{title}</h1>
-        <p class="timestamp">Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p class="timestamp">Generated on: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
 """
 
 
@@ -158,6 +158,6 @@ def generate_html_report(title, html_content):
         str: Complete HTML report
     """
     html_report = generate_html_header(title)
-    html_report += ''.join(html_content)
+    html_report += "".join(html_content)
     html_report += generate_html_footer()
     return html_report

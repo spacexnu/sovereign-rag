@@ -1,22 +1,23 @@
-import os
-import sys
 import argparse
 import datetime
-from llama_index.core import VectorStoreIndex, Settings
+import os
+import sys
+
+import chromadb
+from colorama import Fore, Style, init
+from llama_index.core import Settings, VectorStoreIndex
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
 from llama_index.vector_stores.chroma import ChromaVectorStore
-import chromadb
-from colorama import init, Fore, Style
 
 # Try absolute import first, then relative import as fallback
 try:
-    from src.html_report import generate_html_header, generate_html_footer, add_file_to_html, generate_html_report
+    from src.html_report import add_file_to_html, generate_html_footer, generate_html_header, generate_html_report
 except ImportError:
     try:
-        from html_report import generate_html_header, generate_html_footer, add_file_to_html, generate_html_report
+        from .html_report import add_file_to_html, generate_html_footer, generate_html_header, generate_html_report
     except ImportError:
-        from .html_report import generate_html_header, generate_html_footer, add_file_to_html, generate_html_report
+        from .html_report import add_file_to_html, generate_html_report
 
 init(autoreset=True)
 
@@ -29,13 +30,13 @@ def create_output_directory():
         str: Path to the created output directory
     """
     # Create the main output directory if it doesn't exist
-    output_dir = os.path.join(os.getcwd(), 'output')
+    output_dir = os.path.join(os.getcwd(), "output")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     # Create a subdirectory with the current datetime
     now = datetime.datetime.now()
-    datetime_str = now.strftime('%Y-%m-%d_%H-%M-%S')
+    datetime_str = now.strftime("%Y-%m-%d_%H-%M-%S")
     run_dir = os.path.join(output_dir, datetime_str)
     os.makedirs(run_dir, exist_ok=True)
 
@@ -56,8 +57,8 @@ def find_files_with_extension(directory, extension):
     file_paths = []
 
     # Ensure extension starts with a dot
-    if not extension.startswith('.'):
-        extension = '.' + extension
+    if not extension.startswith("."):
+        extension = "." + extension
 
     for root, _, files in os.walk(directory):
         for file in files:
@@ -83,8 +84,8 @@ def process_file(file_path, index, model_name, ollama_url, output_dir, html_cont
         bool: True if processing was successful, False otherwise
     """
     try:
-        print(f'{Fore.WHITE}{Style.BRIGHT}File process started: {file_path}')
-        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+        print(f"{Fore.WHITE}{Style.BRIGHT}File process started: {file_path}")
+        with open(file_path, encoding="utf-8", errors="replace") as f:
             code = f.read()
 
         query = f"""
@@ -104,7 +105,7 @@ IMPORTANT: always consider the OWASP Top 10 and web application security best pr
 
         retriever = index.as_retriever(similarity_top_k=3)
         nodes = retriever.retrieve(query)
-        context = '\n'.join([n.get_content() for n in nodes])
+        context = "\n".join([n.get_content() for n in nodes])
 
         final_prompt = f"""
         You are a software security analyst. Use ALL the indexed knowledge to analyze the following code:
@@ -130,16 +131,16 @@ IMPORTANT: always consider the OWASP Top 10 and web application security best pr
         file_html = add_file_to_html(file_path, response.text)
         html_content.append(file_html)
 
-        print(f'{Fore.WHITE}{Style.BRIGHT}File process finished: {file_path}')
+        print(f"{Fore.WHITE}{Style.BRIGHT}File process finished: {file_path}")
 
         return True
 
     except Exception as e:
-        print(f'{Fore.RED}{Style.BRIGHT}Error processing {file_path}: {str(e)}')
+        print(f"{Fore.RED}{Style.BRIGHT}Error processing {file_path}: {str(e)}")
         return False
 
 
-def run_query(path, extension=None, model_name='mistral:7b-instruct', ollama_url='http://localhost:11434'):
+def run_query(path, extension=None, model_name="mistral:7b-instruct", ollama_url="http://localhost:11434"):
     """
     Run security analysis on files.
 
@@ -160,15 +161,15 @@ def run_query(path, extension=None, model_name='mistral:7b-instruct', ollama_url
         # Create output directory with datetime subdirectory
         output_dir = create_output_directory()
 
-        print(f'{Fore.WHITE}{Style.BRIGHT}Using Ollama model {model_name} at {ollama_url}...')
+        print(f"{Fore.WHITE}{Style.BRIGHT}Using Ollama model {model_name} at {ollama_url}...")
         Settings.llm = Ollama(model=model_name, base_url=ollama_url, request_timeout=300)
-        Settings.embed_model = HuggingFaceEmbedding(model_name='sentence-transformers/all-MiniLM-L6-v2')
+        Settings.embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-        print(f'{Fore.WHITE}{Style.BRIGHT}Initializing ChromaDB...')
-        chroma_client = chromadb.PersistentClient(path='./chroma_db')
-        collection = chroma_client.get_collection('security_docs')
+        print(f"{Fore.WHITE}{Style.BRIGHT}Initializing ChromaDB...")
+        chroma_client = chromadb.PersistentClient(path="./chroma_db")
+        collection = chroma_client.get_collection("security_docs")
 
-        print(f'{Fore.WHITE}{Style.BRIGHT}Initializing vector store...')
+        print(f"{Fore.WHITE}{Style.BRIGHT}Initializing vector store...")
         vector_store = ChromaVectorStore(chroma_collection=collection)
 
         index = VectorStoreIndex(
@@ -190,11 +191,11 @@ def run_query(path, extension=None, model_name='mistral:7b-instruct', ollama_url
                     return False
             else:
                 print(
-                    f'{Fore.RED}{Style.BRIGHT}Error: When specifying a directory, you must also provide a file extension.'
+                    f"{Fore.RED}{Style.BRIGHT}Error: When specifying a directory, you must also provide a file extension."
                 )
                 return False
 
-        print(f'{Fore.WHITE}{Style.BRIGHT}Found {len(files_to_process)} files to process.')
+        print(f"{Fore.WHITE}{Style.BRIGHT}Found {len(files_to_process)} files to process.")
 
         # Initialize HTML content
         html_content = []
@@ -207,64 +208,64 @@ def run_query(path, extension=None, model_name='mistral:7b-instruct', ollama_url
 
         # Generate and save the HTML report
         if success and html_content:
-            report_title = f'SovereignRag - Security Analysis Report - {os.path.basename(path)}'
+            report_title = f"SovereignRag - Security Analysis Report - {os.path.basename(path)}"
             html_report = generate_html_report(report_title, html_content)
 
             # Save the HTML report
-            report_path = os.path.join(output_dir, 'report.html')
-            with open(report_path, 'w') as f:
+            report_path = os.path.join(output_dir, "report.html")
+            with open(report_path, "w") as f:
                 f.write(html_report)
 
-            print(f'{Fore.GREEN}{Style.BRIGHT}Report saved to: {report_path}')
+            print(f"{Fore.GREEN}{Style.BRIGHT}Report saved to: {report_path}")
 
         return success
 
     except Exception as e:
-        print(f'{Fore.RED}{Style.BRIGHT}Error: {str(e)}')
+        print(f"{Fore.RED}{Style.BRIGHT}Error: {str(e)}")
         return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Analyze code for security vulnerabilities')
+    parser = argparse.ArgumentParser(description="Analyze code for security vulnerabilities")
     parser.add_argument(
-        '--path',
-        '-p',
-        '--file',
-        '-f',
-        dest='path',
+        "--path",
+        "-p",
+        "--file",
+        "-f",
+        dest="path",
         type=str,
         required=True,
-        help='Path to the source code file or directory to analyze',
+        help="Path to the source code file or directory to analyze",
     )
     parser.add_argument(
-        '--extension',
-        '-e',
+        "--extension",
+        "-e",
         type=str,
         help="File extension to filter by when path is a directory (e.g., 'py', 'java')",
     )
     parser.add_argument(
-        '--model',
-        '-m',
+        "--model",
+        "-m",
         type=str,
-        default='mistral:7b-instruct',
-        help='Ollama model to use (default: mistral:7b-instruct)',
+        default="mistral:7b-instruct",
+        help="Ollama model to use (default: mistral:7b-instruct)",
     )
     parser.add_argument(
-        '--ollama-url',
+        "--ollama-url",
         type=str,
-        default='http://localhost:11434',
-        help='Ollama API URL',
+        default="http://localhost:11434",
+        help="Ollama API URL",
     )
     args = parser.parse_args()
 
     # If path is a directory, extension is required
     if os.path.isdir(args.path) and not args.extension:
-        parser.error('--extension is required when path is a directory')
+        parser.error("--extension is required when path is a directory")
 
     success = run_query(args.path, args.extension, args.model, args.ollama_url)
     if not success:
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

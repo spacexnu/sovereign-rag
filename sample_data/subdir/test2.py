@@ -1,6 +1,6 @@
 def goodbye():
-    print('Goodbye, world!')
+    print("Goodbye, world!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     goodbye()

@@ -1,3 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sovereign-rag"
+version = "0.1.0"
+description = "Sovereign Retrieval Augmented Generation for Secure Code Analysis"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+sovereign-rag = "sovereign_rag.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"
@@ -5,12 +26,13 @@ exclude = [".venv", "__pycache__"]
 fix = true
 
 [tool.ruff.lint]
-select = ["I", "F401"]
-
-[tool.ruff.format]
-quote-style = "single"
+select = ["E", "F", "I", "B", "UP"]
+fixable = ["ALL"]
 
 [tool.ruff.lint.isort]
+known-first-party = ["sovereign_rag"]
 combine-as-imports = true
-force-single-line = false
-case-sensitive = false
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

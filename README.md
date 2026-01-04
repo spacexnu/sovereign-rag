@@ -48,6 +48,13 @@ Optional (local dev only):
 - Python 3.10+
 - Ollama
 
+Optional (local dev only, CLI entry point):
+
+```bash
+pip install -e .
+sovereign-rag --help
+```
+
 Build images:
 
 ```bash
@@ -80,7 +87,7 @@ make ingest PDF_DIR=./security_pdfs MODEL=all-MiniLM-L6-v2
 To analyze a source code file for security vulnerabilities:
 
 ```bash
-make query PATH=./src/query.py EXT=py MODEL=qwen2.5:3b-instruct
+make query PATH=./src/sovereign_rag/query.py EXT=py MODEL=qwen2.5:3b-instruct
 ```
 
 Options (via Makefile vars):
@@ -110,8 +117,8 @@ If you prefer raw Docker Compose commands instead of the Makefile:
 docker compose build
 docker compose up -d ollama
 docker compose exec ollama ollama pull qwen2.5:3b-instruct
-docker compose run --rm app python src/cli.py ingest --pdf-dir ./raw_pdfs --model all-MiniLM-L6-v2
-docker compose run --rm app python src/cli.py query --path ./src --extension py --model qwen2.5:3b-instruct --ollama-url http://ollama:11434
+docker compose run --rm app env PYTHONPATH=src python -m sovereign_rag.cli ingest --pdf-dir ./raw_pdfs --model all-MiniLM-L6-v2
+docker compose run --rm app env PYTHONPATH=src python -m sovereign_rag.cli query --path ./src --extension py --model qwen2.5:3b-instruct --ollama-url http://ollama:11434
 docker compose down
 ```
 
@@ -151,8 +158,8 @@ ruff check .
 pytest -q
 
 # App commands (same as prod), pointing to Ollama service
-python src/cli.py ingest --pdf-dir ./raw_pdfs/ --model all-MiniLM-L6-v2
-python src/cli.py query --path ./src --extension py --model qwen2.5:3b-instruct --ollama-url http://ollama:11434
+PYTHONPATH=src python -m sovereign_rag.cli ingest --pdf-dir ./raw_pdfs/ --model all-MiniLM-L6-v2
+PYTHONPATH=src python -m sovereign_rag.cli query --path ./src --extension py --model qwen2.5:3b-instruct --ollama-url http://ollama:11434
 ```
 
 ## Development (local, optional)
