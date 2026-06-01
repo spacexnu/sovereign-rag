@@ -1,7 +1,16 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from sovereign_rag.ingest import clean_text, index_documents, is_relevant_sentence, preprocess_pdf, run_ingest
+from sovereign_rag.ingest import (
+    clean_text,
+    find_source_files,
+    index_documents,
+    is_relevant_sentence,
+    preprocess_markdown,
+    preprocess_pdf,
+    run_ingest,
+    strip_markdown,
+)
 
 
 class TestCleanText(unittest.TestCase):
@@ -81,6 +90,21 @@ class TestIsRelevantSentence(unittest.TestCase):
 
         self.assertTrue(is_relevant_sentence(mock_sent))
 
+    @patch("sovereign_rag.ingest.spacy")
+    def test_verbless_technical_phrase_is_relevant(self, mock_spacy):
+        """Verb-less OWASP-style phrases (e.g. vuln names) are kept when noun-rich."""
+        # "Broken Access Control" has no verb but is a meaningful control title.
+        mock_sent = MagicMock()
+        mock_sent.text = "Broken Access Control"
+
+        # Two proper nouns, no verb.
+        mock_token1 = MagicMock(pos_="PROPN", is_alpha=True)
+        mock_token2 = MagicMock(pos_="ADJ", is_alpha=True)
+        mock_token3 = MagicMock(pos_="PROPN", is_alpha=True)
+        mock_sent.__iter__.return_value = [mock_token1, mock_token2, mock_token3]
+
+        self.assertTrue(is_relevant_sentence(mock_sent))
+
 
 class TestPreprocessPDF(unittest.TestCase):
     """Test the preprocess_pdf function."""
@@ -145,6 +169,59 @@ class TestPreprocessPDF(unittest.TestCase):
         mock_fitz_open.assert_called_once_with("test.pdf")
 
 
+class TestStripMarkdown(unittest.TestCase):
+    """Test the strip_markdown function."""
+
+    def test_removes_heading_markers(self):
+        self.assertEqual(strip_markdown("# Broken Access Control").strip(), "Broken Access Control")
+
+    def test_keeps_link_text_drops_target(self):
+        self.assertEqual(strip_markdown("See [the cheat sheet](https://owasp.org).").strip(), "See the cheat sheet.")
+
+    def test_removes_fenced_code_blocks(self):
+        text = "Intro\n```python\nprint('x')\n```\nOutro"
+        result = strip_markdown(text)
+        self.assertNotIn("print", result)
+        self.assertIn("Intro", result)
+        self.assertIn("Outro", result)
+
+    def test_removes_emphasis_markers(self):
+        self.assertEqual(strip_markdown("**bold** and _italic_"), "bold and italic")
+
+
+class TestPreprocessMarkdown(unittest.TestCase):
+    """Test the preprocess_markdown function."""
+
+    @patch("sovereign_rag.ingest.spacy")
+    def test_preprocess_markdown_success(self, mock_spacy):
+        """Test successful preprocessing of a Markdown file."""
+        mock_nlp = MagicMock()
+        mock_spacy_doc = MagicMock()
+        mock_sent = MagicMock()
+        mock_sent.text = "This is a relevant sentence."
+
+        mock_token1 = MagicMock()
+        mock_token1.pos_ = "NOUN"
+        mock_token2 = MagicMock()
+        mock_token2.pos_ = "VERB"
+        mock_sent.__iter__.return_value = [mock_token1, mock_token2]
+
+        mock_spacy_doc.sents = [mock_sent]
+        mock_nlp.return_value = mock_spacy_doc
+
+        with patch("builtins.open", unittest.mock.mock_open(read_data="# Title\nThis is a relevant sentence.")):
+            with patch.dict("sovereign_rag.ingest.__dict__", {"nlp": mock_nlp}):
+                result = preprocess_markdown("test.md")
+
+        self.assertEqual(result, ["This is a relevant sentence."])
+
+    def test_preprocess_markdown_error(self):
+        """Test error handling in preprocess_markdown."""
+        with patch("builtins.open", side_effect=Exception("Test error")):
+            result = preprocess_markdown("test.md")
+        self.assertEqual(result, [])
+
+
 class TestIndexDocuments(unittest.TestCase):
     """Test the index_documents function."""
 
@@ -163,30 +240,30 @@ class TestIndexDocuments(unittest.TestCase):
         mock_makedirs.assert_called_once_with("test_dir")
 
     @patch("sovereign_rag.ingest.os.path.exists")
-    @patch("sovereign_rag.ingest.os.listdir")
-    def test_index_documents_no_pdf_files(self, mock_listdir, mock_exists):
+    @patch("sovereign_rag.ingest.find_source_files")
+    def test_index_documents_no_pdf_files(self, mock_find_source_files, mock_exists):
         """Test index_documents when there are no PDF files."""
         # Set up mocks
         mock_exists.return_value = True
-        mock_listdir.return_value = ["file1.txt", "file2.doc"]
+        mock_find_source_files.return_value = []
 
         # Call the function
         index_documents("test_dir")
 
         # Verify the result
         mock_exists.assert_called_once_with("test_dir")
-        mock_listdir.assert_called_once_with("test_dir")
+        mock_find_source_files.assert_called_once_with("test_dir")
 
     @patch("sovereign_rag.ingest.os.path.exists")
-    @patch("sovereign_rag.ingest.os.listdir")
-    @patch("sovereign_rag.ingest.os.path.join")
+    @patch("sovereign_rag.ingest.find_source_files")
+    @patch("sovereign_rag.ingest.os.path.relpath")
     @patch("sovereign_rag.ingest.preprocess_pdf")
-    def test_index_documents_with_pdf_files(self, mock_preprocess, mock_join, mock_listdir, mock_exists):
+    def test_index_documents_with_pdf_files(self, mock_preprocess, mock_relpath, mock_find_source_files, mock_exists):
         """Test index_documents with PDF files."""
         # Set up mocks
         mock_exists.return_value = True
-        mock_listdir.return_value = ["file1.pdf", "file2.pdf"]
-        mock_join.side_effect = lambda dir, file: f"{dir}/{file}"
+        mock_find_source_files.return_value = ["test_dir/file1.pdf", "test_dir/subdir/file2.pdf"]
+        mock_relpath.side_effect = ["file1.pdf", "subdir/file2.pdf"]
         mock_preprocess.return_value = ["Chunk 1", "Chunk 2"]
 
         # Mock model and collection
@@ -202,11 +279,27 @@ class TestIndexDocuments(unittest.TestCase):
 
             # Verify the result
             mock_exists.assert_called_once_with("test_dir")
-            mock_listdir.assert_called_once_with("test_dir")
-            self.assertEqual(mock_join.call_count, 2)
+            mock_find_source_files.assert_called_once_with("test_dir")
+            self.assertEqual(mock_relpath.call_count, 2)
             self.assertEqual(mock_preprocess.call_count, 2)
             self.assertEqual(mock_model.encode.call_count, 4)  # 2 files * 2 chunks
             self.assertEqual(mock_collection.add.call_count, 4)  # 2 files * 2 chunks
+
+
+class TestFindSourceFiles(unittest.TestCase):
+    """Test recursive source discovery."""
+
+    @patch("sovereign_rag.ingest.os.walk")
+    def test_find_source_files_recurses_and_skips_hidden_dirs(self, mock_walk):
+        mock_walk.return_value = [
+            ("docs", [".git", "nested"], ["root.md", "notes.txt"]),
+            ("docs/nested", [], ["guide.pdf", "extra.MD"]),
+        ]
+
+        result = find_source_files("docs")
+
+        self.assertEqual(result, ["docs/root.md", "docs/nested/extra.MD", "docs/nested/guide.pdf"])
+        self.assertEqual(mock_walk.return_value[0][1], ["nested"])
 
 
 class TestRunIngest(unittest.TestCase):

@@ -53,6 +53,20 @@ class TestAddFileToHtml(unittest.TestCase):
         self.assertIn("Test analysis result", result)
         self.assertIn('<div class="file-item">', result)
 
+    def test_add_file_to_html_with_sources(self):
+        """Test that reference sources are rendered when provided."""
+        result = add_file_to_html("test_file.py", "Test analysis result", ["owasp_top_10.md", "asvs.pdf"])
+
+        self.assertIn("Reference sources:", result)
+        self.assertIn("owasp_top_10.md", result)
+        self.assertIn("asvs.pdf", result)
+
+    def test_add_file_to_html_without_sources(self):
+        """Test that no sources block is rendered when sources are absent."""
+        result = add_file_to_html("test_file.py", "Test analysis result")
+
+        self.assertNotIn("Reference sources:", result)
+
 
 class TestGenerateHtmlReport(unittest.TestCase):
     """Test the generate_html_report function."""

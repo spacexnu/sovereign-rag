@@ -19,12 +19,15 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
     # Create the ingest command parser
-    ingest_parser = subparsers.add_parser("ingest", help="Index PDF documents for security analysis")
+    ingest_parser = subparsers.add_parser("ingest", help="Index PDF/Markdown documents for security analysis")
     ingest_parser.add_argument(
+        "--docs-dir",
         "--pdf-dir",
+        dest="docs_dir",
         type=str,
         default="./raw_pdfs/",
-        help="Directory containing PDF files to index (default: ./raw_pdfs/)",
+        help="Directory containing .pdf/.md files to index (default: ./raw_pdfs/). "
+        "--pdf-dir is a deprecated alias.",
     )
     ingest_parser.add_argument(
         "--model",
@@ -79,6 +82,12 @@ def main():
         default="http://localhost:11434",
         help="Ollama API URL",
     )
+    query_parser.add_argument(
+        "--num-ctx",
+        type=int,
+        default=None,
+        help="Ollama context window size (e.g. 4096, 8192). Lower values use less VRAM so the model fits on the GPU; omit to use the model default.",
+    )
 
     # Parse arguments
     args = parser.parse_args()
@@ -94,7 +103,7 @@ def main():
         from .ingest import run_ingest
 
         run_ingest(
-            args.pdf_dir,
+            args.docs_dir,
             args.model,
             chunk_size_chars=args.chunk_size_chars,
             overlap_sents=args.overlap_sents,
@@ -108,7 +117,7 @@ def main():
             print(f"{Fore.RED}{Style.BRIGHT}Error: --extension is required when path is a directory")
             sys.exit(1)
 
-        run_query(args.path, args.extension, args.model, args.ollama_url)
+        run_query(args.path, args.extension, args.model, args.ollama_url, args.num_ctx)
 
 
 if __name__ == "__main__":

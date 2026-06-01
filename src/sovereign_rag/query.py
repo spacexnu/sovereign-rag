@@ -105,20 +105,39 @@ IMPORTANT: always consider the OWASP Top 10 and web application security best pr
 
         retriever = index.as_retriever(similarity_top_k=3)
         nodes = retriever.retrieve(query)
-        context = "\n".join([n.get_content() for n in nodes])
+
+        # Build the context with an explicit source label per chunk so the model
+        # can cite where each piece of knowledge came from. The source filename is
+        # stored as chunk metadata at ingest time; fall back to "unknown source".
+        context_blocks = []
+        sources = []
+        for n in nodes:
+            source = n.metadata.get("source", "unknown source") if n.metadata else "unknown source"
+            if source not in sources:
+                sources.append(source)
+            context_blocks.append(f"[Source: {source}]\n{n.get_content()}")
+        context = "\n\n".join(context_blocks)
 
         final_prompt = f"""
         You are a software security analyst. Use ALL the indexed knowledge to analyze the following code:
 
         {code}
 
-        Here is the extracted technical knowledge to assist you:
+        Here is the extracted technical knowledge to assist you. Each block is prefixed
+        with its source document in the form [Source: <document>]:
         {context}
 
         Your objective is to:
         - Identify OWASP vulnerabilities.
         - Point out common vulnerabilities.
         - Suggest security improvements.
+
+        For EVERY vulnerability you report, you MUST include:
+        - A description of the problem.
+        - A suggested fix.
+        - The source: cite the exact source document name (from the [Source: ...] labels
+          above) that the information was drawn from. If no provided source supports the
+          finding, write "Source: general security knowledge".
 
         If no vulnerabilities are found, explicitly state: "No vulnerabilities detected."
 
@@ -127,8 +146,8 @@ IMPORTANT: always consider the OWASP Top 10 and web application security best pr
 
         response = Settings.llm.complete(final_prompt)
 
-        # Add the file analysis to the HTML content
-        file_html = add_file_to_html(file_path, response.text)
+        # Add the file analysis to the HTML content, including the retrieved sources
+        file_html = add_file_to_html(file_path, response.text, sources)
         html_content.append(file_html)
 
         print(f"{Fore.WHITE}{Style.BRIGHT}File process finished: {file_path}")
@@ -140,7 +159,9 @@ IMPORTANT: always consider the OWASP Top 10 and web application security best pr
         return False
 
 
-def run_query(path, extension=None, model_name="mistral:7b-instruct", ollama_url="http://localhost:11434"):
+def run_query(
+    path, extension=None, model_name="mistral:7b-instruct", ollama_url="http://localhost:11434", num_ctx=None
+):
     """
     Run security analysis on files.
 
@@ -149,6 +170,8 @@ def run_query(path, extension=None, model_name="mistral:7b-instruct", ollama_url
         extension (str, optional): File extension to filter by when path is a directory
         model_name (str): The name of the Ollama model to use
         ollama_url (str): The URL of the Ollama API
+        num_ctx (int, optional): Ollama context window size. Smaller values reduce KV-cache
+            VRAM usage so the model fits on the GPU; None uses the model's default.
 
     Returns:
         bool: True if processing was successful, False otherwise
@@ -162,7 +185,8 @@ def run_query(path, extension=None, model_name="mistral:7b-instruct", ollama_url
         output_dir = create_output_directory()
 
         print(f"{Fore.WHITE}{Style.BRIGHT}Using Ollama model {model_name} at {ollama_url}...")
-        Settings.llm = Ollama(model=model_name, base_url=ollama_url, request_timeout=300)
+        llm_kwargs = {"additional_kwargs": {"num_ctx": num_ctx}} if num_ctx else {}
+        Settings.llm = Ollama(model=model_name, base_url=ollama_url, request_timeout=300, **llm_kwargs)
         Settings.embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
         print(f"{Fore.WHITE}{Style.BRIGHT}Initializing ChromaDB...")
@@ -256,13 +280,19 @@ def main():
         default="http://localhost:11434",
         help="Ollama API URL",
     )
+    parser.add_argument(
+        "--num-ctx",
+        type=int,
+        default=None,
+        help="Ollama context window size (e.g. 4096, 8192). Lower values use less VRAM so the model fits on the GPU; omit to use the model default.",
+    )
     args = parser.parse_args()
 
     # If path is a directory, extension is required
     if os.path.isdir(args.path) and not args.extension:
         parser.error("--extension is required when path is a directory")
 
-    success = run_query(args.path, args.extension, args.model, args.ollama_url)
+    success = run_query(args.path, args.extension, args.model, args.ollama_url, args.num_ctx)
     if not success:
         sys.exit(1)
 

@@ -122,17 +122,27 @@ def generate_html_footer():
 """
 
 
-def add_file_to_html(file_path, analysis_result):
+def add_file_to_html(file_path, analysis_result, sources=None):
     """
     Generate HTML for a file analysis result with a collapsible section.
 
     Args:
         file_path (str): Path to the analyzed file
         analysis_result (str): The analysis result text
+        sources (list, optional): Source documents retrieved as context for this file
 
     Returns:
         str: HTML content for the file analysis
     """
+    sources_html = ""
+    if sources:
+        items = "".join(f"<li>{s}</li>" for s in sources)
+        sources_html = f"""
+                <div class="sources">
+                    <strong>Reference sources:</strong>
+                    <ul>{items}</ul>
+                </div>"""
+
     return f"""
         <div class="file-item">
             <div class="file-header">
@@ -140,7 +150,7 @@ def add_file_to_html(file_path, analysis_result):
                 <span class="toggle-icon">+</span>
             </div>
             <div class="file-content">
-                <pre>{analysis_result}</pre>
+                <pre>{analysis_result}</pre>{sources_html}
             </div>
         </div>
 """

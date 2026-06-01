@@ -132,6 +132,7 @@ class TestProcessFile(unittest.TestCase):
         mock_retriever = MagicMock()
         mock_node = MagicMock()
         mock_node.get_content.return_value = "Test context"
+        mock_node.metadata = {"source": "owasp_top_10.md"}
         mock_retriever.retrieve.return_value = [mock_node]
         mock_index.as_retriever.return_value = mock_retriever
 
@@ -148,13 +149,15 @@ class TestProcessFile(unittest.TestCase):
 
         # Verify the result
         self.assertTrue(result)
-        mock_file_open.assert_called_once_with("test_file.py", "r", encoding="utf-8", errors="replace")
+        mock_file_open.assert_called_once_with("test_file.py", encoding="utf-8", errors="replace")
         mock_index.as_retriever.assert_called_once_with(similarity_top_k=3)
         mock_retriever.retrieve.assert_called_once()
         mock_settings.llm.complete.assert_called_once()
         self.assertEqual(len(html_content), 1)
         self.assertIn("test_file.py", html_content[0])
         self.assertIn("Test analysis result", html_content[0])
+        # The retrieved source document should be cited in the report.
+        self.assertIn("owasp_top_10.md", html_content[0])
 
     @patch("sovereign_rag.query.open", new_callable=mock_open)
     def test_process_file_error(self, mock_file_open):
@@ -171,7 +174,7 @@ class TestProcessFile(unittest.TestCase):
 
         # Verify the result
         self.assertFalse(result)
-        mock_file_open.assert_called_once_with("test_file.py", "r", encoding="utf-8", errors="replace")
+        mock_file_open.assert_called_once_with("test_file.py", encoding="utf-8", errors="replace")
         self.assertEqual(len(html_content), 0)
 
 

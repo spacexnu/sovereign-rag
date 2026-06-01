@@ -3,6 +3,7 @@ services:
     image: ollama/ollama:latest
     container_name: sovereign-ollama
     restart: unless-stopped
+    gpus: all
     ports:
       - "11434:11434"
     volumes:
@@ -28,6 +29,8 @@ services:
       - ./chroma_db:/app/chroma_db
       - ./output:/app/output
       - ./raw_pdfs:/app/raw_pdfs
+      - ./sources:/app/sources
+      - ./sample_data:/app/sample_data
     # Run commands directly via `docker compose run --rm app <cmd>`
 
   app-dev:

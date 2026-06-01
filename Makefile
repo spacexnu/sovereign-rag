@@ -1,12 +1,22 @@
 .PHONY: help build up down logs pull-model list-models ingest query shell dev-shell format test
 
 COMPOSE ?= docker compose
+HOST_BIN_PATH ?= /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 MODEL ?= mistral:7b-instruct
 PDF_DIR ?= ./raw_pdfs
-PATH ?=
+DOCS_DIR ?= $(PDF_DIR)
+QUERY_PATH ?=
 EXT ?=
 OLLAMA_URL ?= http://ollama:11434
+NUM_CTX ?=
+ifeq ($(QUERY_PATH),)
+ifeq ($(origin PATH),command line)
+QUERY_PATH := $(PATH)
+endif
+endif
 EXT_ARG := $(if $(EXT),--extension $(EXT),)
+NUM_CTX_ARG := $(if $(NUM_CTX),--num-ctx $(NUM_CTX),)
+QUERY_VOLUME_ARG := $(if $(filter /%,$(QUERY_PATH)),--volume $(QUERY_PATH):$(QUERY_PATH):ro,)
 
 help:
 	@printf "Targets:\n"
@@ -16,45 +26,45 @@ help:
 	@printf "  logs         Follow Ollama logs\n"
 	@printf "  pull-model   Pull MODEL in Ollama (MODEL=...)\n"
 	@printf "  list-models  List Ollama models\n"
-	@printf "  ingest       Ingest PDFs (PDF_DIR=..., MODEL=...)\n"
-	@printf "  query        Run analysis (PATH=..., EXT=..., MODEL=...)\n"
+	@printf "  ingest       Ingest .pdf/.md docs (DOCS_DIR=..., MODEL=...)\n"
+	@printf "  query        Run analysis (QUERY_PATH=..., EXT=..., MODEL=...)\n"
 	@printf "  shell        Open app shell\n"
 	@printf "  dev-shell    Open app-dev shell\n"
 	@printf "  format       Run ruff format in app-dev\n"
 	@printf "  test         Run pytest in app-dev\n"
 
 build:
-	$(COMPOSE) build
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) build
 
 up:
-	$(COMPOSE) up -d ollama
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) up -d ollama
 
 down:
-	$(COMPOSE) down
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) down
 
 logs:
-	$(COMPOSE) logs -f ollama
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) logs -f ollama
 
 pull-model:
-	$(COMPOSE) exec ollama ollama pull $(MODEL)
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) exec ollama ollama pull $(MODEL)
 
 list-models:
-	$(COMPOSE) exec ollama ollama list
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) exec ollama ollama list
 
 ingest:
-	$(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli ingest --pdf-dir $(PDF_DIR) --model $(MODEL)
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli ingest --docs-dir $(DOCS_DIR) --model $(MODEL)
 
 query:
-	$(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL)
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm $(QUERY_VOLUME_ARG) app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(QUERY_PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL) $(NUM_CTX_ARG)
 
 shell:
-	$(COMPOSE) run --rm app bash
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app bash
 
 dev-shell:
-	$(COMPOSE) run --rm app-dev bash
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app-dev bash
 
 format:
-	$(COMPOSE) run --rm app-dev ruff format .
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app-dev ruff format .
 
 test:
-	$(COMPOSE) run --rm app-dev pytest -q
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app-dev pytest -q
