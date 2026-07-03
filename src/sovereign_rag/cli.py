@@ -26,8 +26,7 @@ def main():
         dest="docs_dir",
         type=str,
         default="./raw_pdfs/",
-        help="Directory containing .pdf/.md files to index (default: ./raw_pdfs/). "
-        "--pdf-dir is a deprecated alias.",
+        help="Directory containing .pdf/.md files to index (default: ./raw_pdfs/). --pdf-dir is a deprecated alias.",
     )
     ingest_parser.add_argument(
         "--model",
@@ -86,7 +85,25 @@ def main():
         "--num-ctx",
         type=int,
         default=None,
-        help="Ollama context window size (e.g. 4096, 8192). Lower values use less VRAM so the model fits on the GPU; omit to use the model default.",
+        help=(
+            "Ollama context window size (e.g. 4096, 8192). Lower values use less VRAM so the model fits on "
+            "the GPU; omit to use the model default."
+        ),
+    )
+    query_parser.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="Only analyze files changed in Git. By default this compares the working tree to --changed-base.",
+    )
+    query_parser.add_argument(
+        "--changed-base",
+        default="HEAD",
+        help="Git ref used by --changed-only when --staged is not set (default: HEAD).",
+    )
+    query_parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Only analyze staged files. Intended for pre-commit hooks.",
     )
 
     # Parse arguments
@@ -117,7 +134,16 @@ def main():
             print(f"{Fore.RED}{Style.BRIGHT}Error: --extension is required when path is a directory")
             sys.exit(1)
 
-        run_query(args.path, args.extension, args.model, args.ollama_url, args.num_ctx)
+        run_query(
+            args.path,
+            args.extension,
+            args.model,
+            args.ollama_url,
+            args.num_ctx,
+            changed_only=args.changed_only,
+            changed_base=args.changed_base,
+            staged=args.staged,
+        )
 
 
 if __name__ == "__main__":

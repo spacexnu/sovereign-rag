@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, mock_open, patch
 from sovereign_rag.query import (
     add_file_to_html,
     create_output_directory,
+    filter_to_changed_files,
     find_files_with_extension,
     generate_html_footer,
     generate_html_header,
@@ -102,6 +103,39 @@ class TestFindFilesWithExtension(unittest.TestCase):
         # Verify the result
         expected = ["/test/dir/file1.py", "/test/dir/file3.py", "/test/dir/subdir/file4.py"]
         self.assertEqual(result, expected)
+
+
+class TestChangedFileFiltering(unittest.TestCase):
+    """Test filtering analysis targets to Git-changed files."""
+
+    @patch("sovereign_rag.query.find_changed_files")
+    def test_filter_to_changed_files_keeps_only_changed_candidates(self, mock_find_changed_files):
+        """Only files already selected by path/extension should be kept."""
+        candidates = [
+            "/repo/src/file1.py",
+            "/repo/src/file2.py",
+            "/repo/src/file3.py",
+        ]
+        mock_find_changed_files.return_value = [
+            "/repo/src/file2.py",
+            "/repo/docs/notes.md",
+        ]
+
+        result = filter_to_changed_files(candidates, "/repo/src", changed_base="origin/main")
+
+        self.assertEqual(result, ["/repo/src/file2.py"])
+        mock_find_changed_files.assert_called_once_with("/repo/src", changed_base="origin/main", staged=False)
+
+    @patch("sovereign_rag.query.find_changed_files")
+    def test_filter_to_changed_files_supports_staged_mode(self, mock_find_changed_files):
+        """Staged mode is passed through for pre-commit usage."""
+        candidates = ["/repo/src/file1.py"]
+        mock_find_changed_files.return_value = ["/repo/src/file1.py"]
+
+        result = filter_to_changed_files(candidates, "/repo/src", staged=True)
+
+        self.assertEqual(result, ["/repo/src/file1.py"])
+        mock_find_changed_files.assert_called_once_with("/repo/src", changed_base="HEAD", staged=True)
 
     @patch("sovereign_rag.query.os.walk")
     def test_find_files_with_extension_with_dot(self, mock_walk):
@@ -248,6 +282,42 @@ class TestRunQuery(unittest.TestCase):
         mock_chroma_vector_store.assert_called_once_with(chroma_collection=mock_collection)
         mock_vector_store_index.assert_called_once_with([], vector_store=mock_vector_store)
         self.assertEqual(mock_process_file.call_count, 2)
+
+    @patch("sovereign_rag.query.os.path.exists")
+    @patch("sovereign_rag.query.os.path.isfile")
+    @patch("sovereign_rag.query.os.path.isdir")
+    @patch("sovereign_rag.query.find_files_with_extension")
+    @patch("sovereign_rag.query.filter_to_changed_files")
+    @patch("sovereign_rag.query.create_output_directory")
+    @patch("sovereign_rag.query.Ollama")
+    def test_run_query_changed_only_no_matches_skips_model_initialization(
+        self,
+        mock_ollama,
+        mock_create_output_directory,
+        mock_filter_to_changed_files,
+        mock_find_files,
+        mock_isdir,
+        mock_isfile,
+        mock_exists,
+    ):
+        """No matching changed files should be a successful no-op."""
+        mock_exists.return_value = True
+        mock_isfile.return_value = False
+        mock_isdir.return_value = True
+        mock_find_files.return_value = ["test_dir/file1.py"]
+        mock_filter_to_changed_files.return_value = []
+
+        result = run_query("test_dir", "py", "test_model", "http://localhost:11434", changed_only=True)
+
+        self.assertTrue(result)
+        mock_filter_to_changed_files.assert_called_once_with(
+            ["test_dir/file1.py"],
+            "test_dir",
+            changed_base="HEAD",
+            staged=False,
+        )
+        mock_create_output_directory.assert_not_called()
+        mock_ollama.assert_not_called()
 
     @patch("sovereign_rag.query.os.path.exists")
     def test_run_query_path_not_found(self, mock_exists):
