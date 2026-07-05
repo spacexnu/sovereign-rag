@@ -62,7 +62,10 @@ Build images:
 make build
 ```
 
-Documentation:
+Documentation is published at
+[spacexnu.github.io/sovereign-rag](https://spacexnu.github.io/sovereign-rag/) —
+see the [Troubleshooting](https://spacexnu.github.io/sovereign-rag/troubleshooting/)
+guide for common setup issues (port conflicts, host Ollama, VRAM). Build it locally with:
 
 ```bash
 make docs-install

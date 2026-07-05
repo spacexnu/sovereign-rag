@@ -49,6 +49,7 @@ nav:
       - Architecture: development/architecture.md
       - Testing: development/testing.md
       - GitHub Pages: development/github-pages.md
+  - Troubleshooting: troubleshooting.md
 
 markdown_extensions:
   - admonition
