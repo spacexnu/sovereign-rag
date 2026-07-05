@@ -1,4 +1,4 @@
-.PHONY: help build up down logs pull-model list-models ingest query shell dev-shell format test
+.PHONY: help build up down logs pull-model list-models ingest query shell dev-shell format test docs-install docs-build docs-serve
 
 COMPOSE ?= docker compose
 HOST_BIN_PATH ?= /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
@@ -7,8 +7,19 @@ PDF_DIR ?= ./raw_pdfs
 DOCS_DIR ?= $(PDF_DIR)
 QUERY_PATH ?=
 EXT ?=
+# HOST_OLLAMA=1 targets an Ollama already running on the host (e.g. a native
+# install) instead of the compose `ollama` service. This avoids the port 11434
+# conflict when both are up, and reuses models you already pulled natively.
+HOST_OLLAMA ?=
+ifeq ($(filter 1 true yes,$(HOST_OLLAMA)),)
 OLLAMA_URL ?= http://ollama:11434
+else
+OLLAMA_URL ?= http://host.docker.internal:11434
+endif
 NUM_CTX ?=
+CHANGED_ONLY ?=
+CHANGED_BASE ?=
+STAGED ?=
 ifeq ($(QUERY_PATH),)
 ifeq ($(origin PATH),command line)
 QUERY_PATH := $(PATH)
@@ -16,7 +27,18 @@ endif
 endif
 EXT_ARG := $(if $(EXT),--extension $(EXT),)
 NUM_CTX_ARG := $(if $(NUM_CTX),--num-ctx $(NUM_CTX),)
+CHANGED_ONLY_ARG := $(if $(filter 1 true yes,$(CHANGED_ONLY)),--changed-only,)
+CHANGED_BASE_ARG := $(if $(CHANGED_BASE),--changed-base $(CHANGED_BASE),)
+STAGED_ARG := $(if $(filter 1 true yes,$(STAGED)),--staged,)
+# Changed-file analysis needs the host working tree + .git inside the container so
+# Git can diff uncommitted/untracked changes. Bind-mount the repo at /app on the
+# prod `app` service instead of falling back to the dev image.
+REPO_MOUNT_ARG := $(if $(strip $(CHANGED_ONLY_ARG)$(STAGED_ARG)),--volume $(CURDIR):/app,)
 QUERY_VOLUME_ARG := $(if $(filter /%,$(QUERY_PATH)),--volume $(QUERY_PATH):$(QUERY_PATH):ro,)
+# With HOST_OLLAMA, skip starting the compose `ollama` dependency (the host
+# already runs one). The host is reachable as host.docker.internal via the
+# `extra_hosts` entry on the `app` service in docker-compose.yml.
+HOST_OLLAMA_ARG := $(if $(filter 1 true yes,$(HOST_OLLAMA)),--no-deps,)
 
 help:
 	@printf "Targets:\n"
@@ -27,11 +49,14 @@ help:
 	@printf "  pull-model   Pull MODEL in Ollama (MODEL=...)\n"
 	@printf "  list-models  List Ollama models\n"
 	@printf "  ingest       Ingest .pdf/.md docs (DOCS_DIR=..., MODEL=...)\n"
-	@printf "  query        Run analysis (QUERY_PATH=..., EXT=..., MODEL=...)\n"
+	@printf "  query        Run analysis (QUERY_PATH=..., EXT=..., MODEL=..., CHANGED_ONLY=1, STAGED=1, HOST_OLLAMA=1)\n"
 	@printf "  shell        Open app shell\n"
 	@printf "  dev-shell    Open app-dev shell\n"
 	@printf "  format       Run ruff format in app-dev\n"
 	@printf "  test         Run pytest in app-dev\n"
+	@printf "  docs-install Install MkDocs dependencies locally\n"
+	@printf "  docs-build   Build documentation with MkDocs strict mode\n"
+	@printf "  docs-serve   Serve documentation locally\n"
 
 build:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) build
@@ -55,7 +80,7 @@ ingest:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli ingest --docs-dir $(DOCS_DIR) --model $(MODEL)
 
 query:
-	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm $(QUERY_VOLUME_ARG) app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(QUERY_PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL) $(NUM_CTX_ARG)
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm $(HOST_OLLAMA_ARG) $(QUERY_VOLUME_ARG) $(REPO_MOUNT_ARG) app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(QUERY_PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL) $(NUM_CTX_ARG) $(CHANGED_ONLY_ARG) $(CHANGED_BASE_ARG) $(STAGED_ARG)
 
 shell:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app bash
@@ -68,3 +93,12 @@ format:
 
 test:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app-dev pytest -q
+
+docs-install:
+	python -m pip install -r requirements/requirements_docs.txt
+
+docs-build:
+	mkdocs build --strict
+
+docs-serve:
+	mkdocs serve

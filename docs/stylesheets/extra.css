@@ -1,0 +1,43 @@
+:root {
+  --sr-border: rgba(20, 184, 166, 0.22);
+}
+
+.md-typeset .hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 2rem;
+  align-items: center;
+  margin: 1.5rem 0 2rem;
+}
+
+.md-typeset .hero-panel {
+  border: 1px solid var(--sr-border);
+  border-radius: 8px;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--md-default-bg-color) 92%, #14b8a6 8%);
+}
+
+.md-typeset .metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1.5rem 0;
+}
+
+.md-typeset .metric {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+  padding: 0.8rem;
+}
+
+.md-typeset .metric strong {
+  display: block;
+  font-size: 1.2rem;
+}
+
+@media (max-width: 760px) {
+  .md-typeset .hero-grid,
+  .md-typeset .metric-row {
+    grid-template-columns: 1fr;
+  }
+}

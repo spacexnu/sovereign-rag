@@ -22,6 +22,10 @@ services:
       ollama:
         condition: service_started
     working_dir: /app
+    # Lets `HOST_OLLAMA=1` reach an Ollama running on the host via
+    # http://host.docker.internal:11434 (harmless when unused).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - PYTHONUNBUFFERED=1
     volumes:

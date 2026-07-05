@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![Build](https://github.com/spacexnu/sovereign-rag/actions/workflows/build.yml/badge.svg)](https://github.com/spacexnu/sovereign-rag/actions/workflows/build.yml)
+[![Docs](https://github.com/spacexnu/sovereign-rag/actions/workflows/docs.yml/badge.svg)](https://spacexnu.github.io/sovereign-rag/)
 
 ---
 
@@ -61,6 +62,14 @@ Build images:
 make build
 ```
 
+Documentation:
+
+```bash
+make docs-install
+make docs-build
+make docs-serve
+```
+
 ## Usage (Docker)
 
 SovereignRAG provides a unified CLI interface with colored output for better readability. There are two main commands:
@@ -106,6 +115,9 @@ Options (via Makefile vars):
 - `MODEL`: Ollama model to use (default: qwen2.5:3b-instruct)
 - `OLLAMA_URL`: Ollama API URL (default: http://ollama:11434)
 - `NUM_CTX`: Ollama context window size, e.g. `4096` or `8192` (optional). Lower values use less VRAM so the model fits on the GPU; omit to use the model default.
+- `CHANGED_ONLY`: Set to `1` to analyze only files changed in Git.
+- `CHANGED_BASE`: Git ref used by `CHANGED_ONLY` (default: `HEAD`). Use `origin/main` or `origin/master` for a pre-push style check.
+- `STAGED`: Set to `1` to analyze only staged files. This is intended for pre-commit hooks.
 
 Absolute `QUERY_PATH` values are mounted read-only into the app container at the
 same path, which lets you analyze source trees outside this repository.
@@ -113,6 +125,23 @@ same path, which lets you analyze source trees outside this repository.
 Example (limit context to keep a 7B model on an 8GB GPU):
 ```bash
 make query QUERY_PATH=./src EXT=py MODEL=qwen2.5-coder:7b-instruct NUM_CTX=8192
+```
+
+Example (only analyze modified Python files in this repo):
+```bash
+make query QUERY_PATH=./src EXT=py CHANGED_ONLY=1 MODEL=qwen2.5-coder:7b-instruct
+```
+
+Example pre-commit hook (`.git/hooks/pre-commit`):
+```bash
+#!/bin/sh
+make query QUERY_PATH=./src EXT=py STAGED=1 MODEL=qwen2.5-coder:7b-instruct
+```
+
+Example pre-push hook (`.git/hooks/pre-push`):
+```bash
+#!/bin/sh
+make query QUERY_PATH=./src EXT=py CHANGED_ONLY=1 CHANGED_BASE=origin/main MODEL=qwen2.5-coder:7b-instruct
 ```
 
 ### Makefile helpers

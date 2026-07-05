@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import os
+import subprocess
 import sys
 
 import chromadb
@@ -15,7 +16,12 @@ try:
     from src.html_report import add_file_to_html, generate_html_footer, generate_html_header, generate_html_report
 except ImportError:
     try:
-        from .html_report import add_file_to_html, generate_html_footer, generate_html_header, generate_html_report
+        from .html_report import (
+            add_file_to_html,
+            generate_html_footer,  # noqa: F401 - re-exported for compatibility with existing imports/tests.
+            generate_html_header,  # noqa: F401 - re-exported for compatibility with existing imports/tests.
+            generate_html_report,
+        )
     except ImportError:
         from .html_report import add_file_to_html, generate_html_report
 
@@ -66,6 +72,75 @@ def find_files_with_extension(directory, extension):
                 file_paths.append(os.path.join(root, file))
 
     return file_paths
+
+
+def _run_git(args, cwd):
+    """Run a Git command and return stdout lines.
+
+    SovereignRAG is meant to be pointed at arbitrary project directories, which are
+    often bind-mounted with a different owner than the process (e.g. host uid vs.
+    root in Docker). Git would reject those as "dubious ownership", so every command
+    trusts its target via a per-invocation `-c safe.directory=*`. This is scoped to
+    the git processes spawned here — it sets no global/system config.
+    """
+    result = subprocess.run(
+        ["git", "-c", "safe.directory=*", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def find_git_root(path):
+    """Return the Git root for path, or None when path is outside a repository."""
+    cwd = path if os.path.isdir(path) else os.path.dirname(path) or "."
+    try:
+        roots = _run_git(["rev-parse", "--show-toplevel"], cwd)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return roots[0] if roots else None
+
+
+def find_changed_files(path, changed_base="HEAD", staged=False):
+    """Return changed files under path as absolute paths.
+
+    The default mode compares the working tree against changed_base and includes
+    untracked files. staged=True is intended for pre-commit hooks and only
+    considers files in the index.
+    """
+    git_root = find_git_root(path)
+    if not git_root:
+        raise RuntimeError(f"Path '{path}' is not inside a Git repository, or Git is not available.")
+
+    path_abs = os.path.abspath(path)
+    pathspec = os.path.relpath(path_abs, git_root)
+    if pathspec == ".":
+        pathspec = "."
+
+    if staged:
+        changed = _run_git(["diff", "--cached", "--name-only", "--diff-filter=ACMR", "--", pathspec], git_root)
+    else:
+        changed = _run_git(["diff", "--name-only", "--diff-filter=ACMR", changed_base, "--", pathspec], git_root)
+        changed.extend(_run_git(["ls-files", "--others", "--exclude-standard", "--", pathspec], git_root))
+
+    changed_abs = []
+    seen = set()
+    for file_path in changed:
+        absolute_path = os.path.abspath(os.path.join(git_root, file_path))
+        if absolute_path in seen or not os.path.isfile(absolute_path):
+            continue
+        seen.add(absolute_path)
+        changed_abs.append(absolute_path)
+
+    return changed_abs
+
+
+def filter_to_changed_files(files_to_process, path, changed_base="HEAD", staged=False):
+    """Keep only files that Git reports as changed."""
+    changed_files = set(find_changed_files(path, changed_base=changed_base, staged=staged))
+    return [file_path for file_path in files_to_process if os.path.abspath(file_path) in changed_files]
 
 
 def process_file(file_path, index, model_name, ollama_url, output_dir, html_content):
@@ -160,7 +235,14 @@ IMPORTANT: always consider the OWASP Top 10 and web application security best pr
 
 
 def run_query(
-    path, extension=None, model_name="mistral:7b-instruct", ollama_url="http://localhost:11434", num_ctx=None
+    path,
+    extension=None,
+    model_name="mistral:7b-instruct",
+    ollama_url="http://localhost:11434",
+    num_ctx=None,
+    changed_only=False,
+    changed_base="HEAD",
+    staged=False,
 ):
     """
     Run security analysis on files.
@@ -172,6 +254,9 @@ def run_query(
         ollama_url (str): The URL of the Ollama API
         num_ctx (int, optional): Ollama context window size. Smaller values reduce KV-cache
             VRAM usage so the model fits on the GPU; None uses the model's default.
+        changed_only (bool): Only analyze files changed in Git.
+        changed_base (str): Git ref used as the base for changed_only when staged=False.
+        staged (bool): Only analyze staged files; useful for pre-commit hooks.
 
     Returns:
         bool: True if processing was successful, False otherwise
@@ -181,6 +266,39 @@ def run_query(
         return False
 
     try:
+        # Determine files to process
+        files_to_process = []
+        if os.path.isfile(path):
+            files_to_process = [path]
+        elif os.path.isdir(path):
+            if extension:
+                files_to_process = find_files_with_extension(path, extension)
+                if not files_to_process:
+                    print(
+                        f"{Fore.YELLOW}No files with extension '{extension}' found in '{path}' or its subdirectories."
+                    )
+                    return False
+            else:
+                print(
+                    f"{Fore.RED}{Style.BRIGHT}Error: When specifying a directory, you must also provide a "
+                    "file extension."
+                )
+                return False
+
+        if changed_only or staged:
+            files_to_process = filter_to_changed_files(
+                files_to_process,
+                path,
+                changed_base=changed_base,
+                staged=staged,
+            )
+            changed_label = "staged" if staged else f"changed against {changed_base}"
+            if not files_to_process:
+                print(f"{Fore.YELLOW}No {changed_label} files matched the requested path/extension.")
+                return True
+
+        print(f"{Fore.WHITE}{Style.BRIGHT}Found {len(files_to_process)} files to process.")
+
         # Create output directory with datetime subdirectory
         output_dir = create_output_directory()
 
@@ -200,26 +318,6 @@ def run_query(
             [],
             vector_store=vector_store,
         )
-
-        # Determine files to process
-        files_to_process = []
-        if os.path.isfile(path):
-            files_to_process = [path]
-        elif os.path.isdir(path):
-            if extension:
-                files_to_process = find_files_with_extension(path, extension)
-                if not files_to_process:
-                    print(
-                        f"{Fore.YELLOW}No files with extension '{extension}' found in '{path}' or its subdirectories."
-                    )
-                    return False
-            else:
-                print(
-                    f"{Fore.RED}{Style.BRIGHT}Error: When specifying a directory, you must also provide a file extension."
-                )
-                return False
-
-        print(f"{Fore.WHITE}{Style.BRIGHT}Found {len(files_to_process)} files to process.")
 
         # Initialize HTML content
         html_content = []
@@ -284,7 +382,25 @@ def main():
         "--num-ctx",
         type=int,
         default=None,
-        help="Ollama context window size (e.g. 4096, 8192). Lower values use less VRAM so the model fits on the GPU; omit to use the model default.",
+        help=(
+            "Ollama context window size (e.g. 4096, 8192). Lower values use less VRAM so the model fits on "
+            "the GPU; omit to use the model default."
+        ),
+    )
+    parser.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="Only analyze files changed in Git. By default this compares the working tree to --changed-base.",
+    )
+    parser.add_argument(
+        "--changed-base",
+        default="HEAD",
+        help="Git ref used by --changed-only when --staged is not set (default: HEAD).",
+    )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Only analyze staged files. Intended for pre-commit hooks.",
     )
     args = parser.parse_args()
 
@@ -292,7 +408,16 @@ def main():
     if os.path.isdir(args.path) and not args.extension:
         parser.error("--extension is required when path is a directory")
 
-    success = run_query(args.path, args.extension, args.model, args.ollama_url, args.num_ctx)
+    success = run_query(
+        args.path,
+        args.extension,
+        args.model,
+        args.ollama_url,
+        args.num_ctx,
+        changed_only=args.changed_only,
+        changed_base=args.changed_base,
+        staged=args.staged,
+    )
     if not success:
         sys.exit(1)
 
