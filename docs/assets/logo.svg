@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="SovereignRAG logo">
+  <rect width="96" height="96" rx="18" fill="#0b1117"/>
+  <path d="M48 12 78 24v21c0 19-12 32-30 39-18-7-30-20-30-39V24l30-12Z" fill="#14b8a6"/>
+  <path d="M33 45h30M48 30v30M37 60h22" stroke="#0b1117" stroke-width="7" stroke-linecap="round"/>
+</svg>
