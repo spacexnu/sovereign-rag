@@ -22,7 +22,10 @@ NUM_CTX_ARG := $(if $(NUM_CTX),--num-ctx $(NUM_CTX),)
 CHANGED_ONLY_ARG := $(if $(filter 1 true yes,$(CHANGED_ONLY)),--changed-only,)
 CHANGED_BASE_ARG := $(if $(CHANGED_BASE),--changed-base $(CHANGED_BASE),)
 STAGED_ARG := $(if $(filter 1 true yes,$(STAGED)),--staged,)
-QUERY_SERVICE := $(if $(strip $(CHANGED_ONLY_ARG)$(STAGED_ARG)),app-dev,app)
+# Changed-file analysis needs the host working tree + .git inside the container so
+# Git can diff uncommitted/untracked changes. Bind-mount the repo at /app on the
+# prod `app` service instead of falling back to the dev image.
+REPO_MOUNT_ARG := $(if $(strip $(CHANGED_ONLY_ARG)$(STAGED_ARG)),--volume $(CURDIR):/app,)
 QUERY_VOLUME_ARG := $(if $(filter /%,$(QUERY_PATH)),--volume $(QUERY_PATH):$(QUERY_PATH):ro,)
 
 help:
@@ -65,7 +68,7 @@ ingest:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli ingest --docs-dir $(DOCS_DIR) --model $(MODEL)
 
 query:
-	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm $(QUERY_VOLUME_ARG) $(QUERY_SERVICE) env PYTHONPATH=src python -m sovereign_rag.cli query --path $(QUERY_PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL) $(NUM_CTX_ARG) $(CHANGED_ONLY_ARG) $(CHANGED_BASE_ARG) $(STAGED_ARG)
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm $(QUERY_VOLUME_ARG) $(REPO_MOUNT_ARG) app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(QUERY_PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL) $(NUM_CTX_ARG) $(CHANGED_ONLY_ARG) $(CHANGED_BASE_ARG) $(STAGED_ARG)
 
 shell:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app bash
