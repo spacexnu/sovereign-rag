@@ -7,7 +7,15 @@ PDF_DIR ?= ./raw_pdfs
 DOCS_DIR ?= $(PDF_DIR)
 QUERY_PATH ?=
 EXT ?=
+# HOST_OLLAMA=1 targets an Ollama already running on the host (e.g. a native
+# install) instead of the compose `ollama` service. This avoids the port 11434
+# conflict when both are up, and reuses models you already pulled natively.
+HOST_OLLAMA ?=
+ifeq ($(filter 1 true yes,$(HOST_OLLAMA)),)
 OLLAMA_URL ?= http://ollama:11434
+else
+OLLAMA_URL ?= http://host.docker.internal:11434
+endif
 NUM_CTX ?=
 CHANGED_ONLY ?=
 CHANGED_BASE ?=
@@ -27,6 +35,10 @@ STAGED_ARG := $(if $(filter 1 true yes,$(STAGED)),--staged,)
 # prod `app` service instead of falling back to the dev image.
 REPO_MOUNT_ARG := $(if $(strip $(CHANGED_ONLY_ARG)$(STAGED_ARG)),--volume $(CURDIR):/app,)
 QUERY_VOLUME_ARG := $(if $(filter /%,$(QUERY_PATH)),--volume $(QUERY_PATH):$(QUERY_PATH):ro,)
+# With HOST_OLLAMA, skip starting the compose `ollama` dependency (the host
+# already runs one). The host is reachable as host.docker.internal via the
+# `extra_hosts` entry on the `app` service in docker-compose.yml.
+HOST_OLLAMA_ARG := $(if $(filter 1 true yes,$(HOST_OLLAMA)),--no-deps,)
 
 help:
 	@printf "Targets:\n"
@@ -37,7 +49,7 @@ help:
 	@printf "  pull-model   Pull MODEL in Ollama (MODEL=...)\n"
 	@printf "  list-models  List Ollama models\n"
 	@printf "  ingest       Ingest .pdf/.md docs (DOCS_DIR=..., MODEL=...)\n"
-	@printf "  query        Run analysis (QUERY_PATH=..., EXT=..., MODEL=..., CHANGED_ONLY=1, STAGED=1)\n"
+	@printf "  query        Run analysis (QUERY_PATH=..., EXT=..., MODEL=..., CHANGED_ONLY=1, STAGED=1, HOST_OLLAMA=1)\n"
 	@printf "  shell        Open app shell\n"
 	@printf "  dev-shell    Open app-dev shell\n"
 	@printf "  format       Run ruff format in app-dev\n"
@@ -68,7 +80,7 @@ ingest:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app env PYTHONPATH=src python -m sovereign_rag.cli ingest --docs-dir $(DOCS_DIR) --model $(MODEL)
 
 query:
-	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm $(QUERY_VOLUME_ARG) $(REPO_MOUNT_ARG) app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(QUERY_PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL) $(NUM_CTX_ARG) $(CHANGED_ONLY_ARG) $(CHANGED_BASE_ARG) $(STAGED_ARG)
+	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm $(HOST_OLLAMA_ARG) $(QUERY_VOLUME_ARG) $(REPO_MOUNT_ARG) app env PYTHONPATH=src python -m sovereign_rag.cli query --path $(QUERY_PATH) $(EXT_ARG) --model $(MODEL) --ollama-url $(OLLAMA_URL) $(NUM_CTX_ARG) $(CHANGED_ONLY_ARG) $(CHANGED_BASE_ARG) $(STAGED_ARG)
 
 shell:
 	/usr/bin/env PATH="$(HOST_BIN_PATH)" $(COMPOSE) run --rm app bash
