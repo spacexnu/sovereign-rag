@@ -75,9 +75,16 @@ def find_files_with_extension(directory, extension):
 
 
 def _run_git(args, cwd):
-    """Run a Git command and return stdout lines."""
+    """Run a Git command and return stdout lines.
+
+    SovereignRAG is meant to be pointed at arbitrary project directories, which are
+    often bind-mounted with a different owner than the process (e.g. host uid vs.
+    root in Docker). Git would reject those as "dubious ownership", so every command
+    trusts its target via a per-invocation `-c safe.directory=*`. This is scoped to
+    the git processes spawned here — it sets no global/system config.
+    """
     result = subprocess.run(
-        ["git", *args],
+        ["git", "-c", "safe.directory=*", *args],
         cwd=cwd,
         check=True,
         capture_output=True,

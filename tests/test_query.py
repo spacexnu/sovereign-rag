@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, mock_open, patch
 
 from sovereign_rag.query import (
+    _run_git,
     add_file_to_html,
     create_output_directory,
     filter_to_changed_files,
@@ -103,6 +104,26 @@ class TestFindFilesWithExtension(unittest.TestCase):
         # Verify the result
         expected = ["/test/dir/file1.py", "/test/dir/file3.py", "/test/dir/subdir/file4.py"]
         self.assertEqual(result, expected)
+
+
+class TestRunGit(unittest.TestCase):
+    """Test the Git subprocess wrapper."""
+
+    @patch("sovereign_rag.query.subprocess.run")
+    def test_run_git_trusts_target_repo_per_invocation(self, mock_run):
+        """Every Git call must pass `-c safe.directory=*` so bind-mounted repos with
+        a different owner are not rejected as dubious ownership."""
+        mock_run.return_value = MagicMock(stdout="/repo\n")
+
+        result = _run_git(["rev-parse", "--show-toplevel"], "/repo")
+
+        self.assertEqual(result, ["/repo"])
+        args, kwargs = mock_run.call_args
+        self.assertEqual(
+            args[0],
+            ["git", "-c", "safe.directory=*", "rev-parse", "--show-toplevel"],
+        )
+        self.assertEqual(kwargs["cwd"], "/repo")
 
 
 class TestChangedFileFiltering(unittest.TestCase):
